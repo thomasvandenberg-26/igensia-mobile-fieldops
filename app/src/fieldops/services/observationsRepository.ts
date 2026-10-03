@@ -7,6 +7,12 @@ import { outbox } from '../../shared/services/outbox';
 
 const OBSERVATIONS_KEY = 'observations';
 
+// erreur reseau (hors ligne / timeout) : on bascule en mode offline
+const isNetworkError = (e: unknown) => {
+  const err = (e instanceof Error) ? e as Error : null;
+  return err?.name === 'TimeoutError' || err instanceof TypeError; // fetch hors ligne => TypeError "Failed to fetch"
+};
+
 const getLocalObservations = async () => {
   return (await preferencesLocalStore.get(OBSERVATIONS_KEY) || []) as Observation[];
 }
@@ -21,6 +27,13 @@ export const updateLocalStoreForObservation = async (observation: Observation) =
   } else {
     localObservations.push(observation);
   }
+  await preferencesLocalStore.set(OBSERVATIONS_KEY, localObservations);
+}
+
+// remplace dans le cache local l'observation creee hors ligne (id client) par celle renvoyee par le serveur
+export const replaceLocalObservation = async (oldId: string, observation: Observation) => {
+  const localObservations = (await getLocalObservations()).filter(o => o.id !== oldId && o.id !== observation.id);
+  localObservations.push(observation);
   await preferencesLocalStore.set(OBSERVATIONS_KEY, localObservations);
 }
 
@@ -84,8 +97,42 @@ export const observationsRepository = {
     sessionId: string,
     input: ObservationInput & { user_id: string }
   ): Promise<Observation> {
-    // TODO BONUS EXTRA offline create modification en s'inspirant de l'update
-    return await observationsApi.create(token, sessionId, input);
+    try {
+      const observation = await observationsApi.create(token, sessionId, input);
+      await updateLocalStoreForObservation(observation);
+      return observation;
+
+    } catch (e) {
+      if (!isNetworkError(e)) throw e; // erreurs metier : a corriger par l'utilisateur
+
+      console.log('observationsRepository create network error, adding to cache and outbox', e);
+      const nowISO601 = new Date().toISOString();
+      const createdObservation: Observation = {
+        id: crypto.randomUUID(), // identifiant genere cote client !
+        session_id: sessionId,
+        created_at: nowISO601,
+        updated_at: nowISO601,
+        status: 'created',
+        status_changed_at: nowISO601,
+        sync_status: 'PENDING', // TRES IMPORTANT pour l'offline !
+        ...input,
+      };
+      const localObservations = await getLocalObservations();
+      localObservations.push(createdObservation);
+
+      const payload = { ...createdObservation };
+      delete payload.user;
+      delete payload.photos; // TODO photos hors ligne (ajout separe via addPhoto)
+      await outbox.enqueue({
+        entity: 'observation',
+        entityId: createdObservation.id,
+        sessionId,
+        operationType: 'create',
+        payload,
+      });
+      await preferencesLocalStore.set(OBSERVATIONS_KEY, localObservations);
+      return createdObservation;
+    }
   },
 
   async update(

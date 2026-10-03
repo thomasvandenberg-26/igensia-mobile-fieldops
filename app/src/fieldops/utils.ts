@@ -65,10 +65,10 @@ export const takePhoto = async (): Promise<PhotoInput | undefined> => {
     // NB. en PWA choisit plutôt un fichier, voici un exemple petit :
     // https://commons.wikimedia.org/wiki/File:JPEG_example_JPG_RIP_001.jpg
     const result = await Camera.takePhoto({
-      quality: 10, // optionnel, 0-100, que si EncodingType.JPEG, pas sur PWA, ici faible pour alléger
-      targetHeight: 10, // optionnel, pour une image pas excessivement grosse
-      targetWidth: 10, // optionnel, pour une image pas excessivement grosse
-      cameraDirection: CameraDirection.Front, // optionnel, pas l'objectif selfie
+      quality: 70, // 0-100, compromis qualité/poids (10 donnait une image illisible)
+      targetHeight: 600, // image raisonnable, pas 10px (illisible)
+      targetWidth: 800, // image raisonnable, pas 10px (illisible)
+      cameraDirection: CameraDirection.Rear, // objectif arrière (et non selfie) pour photographier une observation
       includeMetadata: true, // pour avoir result.metadata.format permettant de bâtir un mimeType
       //encodingType: EncodingType.JPEG, // [défaut, OK pour FieldOps]
     });

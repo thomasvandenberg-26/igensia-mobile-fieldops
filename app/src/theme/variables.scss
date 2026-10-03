@@ -268,3 +268,11 @@ body {
     background: transparent !important;
   }
 }
+
+// Les autres couches au-dessus de la carte native doivent aussi etre
+// transparentes (html, routeur Ionic, pages) sinon elles la masquent.
+html,
+ion-router-outlet,
+.ion-page {
+  background: transparent !important;
+}

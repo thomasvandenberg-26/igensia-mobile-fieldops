@@ -5,7 +5,7 @@ import { observationsApi, ObservationInput } from '../../fieldops/services/obser
 import { profileApi } from '../../auth/services/profileApi';
 import { GeoJSONPoint, Observation, PhotoInput } from '../../fieldops/types';
 
-import { observationsRepository, updateLocalStoreForObservation } from '../../fieldops/services/observationsRepository';
+import { observationsRepository, updateLocalStoreForObservation, replaceLocalObservation } from '../../fieldops/services/observationsRepository';
 import { outbox } from '../services/outbox';
 
 // Accès unifié à la couche de services
@@ -51,8 +51,7 @@ export function useDataService() {
         fetchOne: (sessionId: string, obsId: string) =>
           observationsRepository.fetchOne(token, sessionId, obsId),
         create: (sessionId: string, input: ObservationInput) =>
-          // TODO BONUS EXTRA offline create modification en s'inspirant de l'update
-          observationsApi.create(token, sessionId, { ...input, user_id: user.id }),
+          observationsRepository.create(token, sessionId, { ...input, user_id: user.id }),
         update: (sessionId: string, obsId: string, input: ObservationInput) =>
           observationsRepository.update(token, sessionId, obsId, input),
         delete: (sessionId: string, obsId: string) =>
@@ -92,7 +91,22 @@ export function useDataService() {
               continue; // on n'exécute si une précédente opération sur le même id a échouée
 
             } else if (op.operationType === 'create') {
-              // TODO BONUS EXTRA offline create modification en s'inspirant de l'update
+              try {
+                // l'id genere cote client est envoye au serveur (s'il l'accepte)
+                const resObservation = await observationsApi.create(token, obs.session_id, obs as any);
+                await outbox.remove(op.id);
+                await replaceLocalObservation(obs.id, resObservation);
+              } catch (e) {
+                const err = (e instanceof Error) ? e as Error : null;
+                const isNetworkError = err?.name === 'TimeoutError' || err instanceof TypeError;
+                console.log('DataService syncAll create error', JSON.stringify(op, null, 2), e);
+                failedIds.push(obs.id); // les operations suivantes sur le meme id attendent
+                if (isNetworkError) {
+                  await outbox.markFailed(op.id, JSON.stringify(e, null, 2));
+                } else {
+                  await outbox.markFailed(op.id, err?.message || JSON.stringify(e)); // erreur metier, a resoudre
+                }
+              }
               
             } else if (op.operationType === 'update') {
               try {

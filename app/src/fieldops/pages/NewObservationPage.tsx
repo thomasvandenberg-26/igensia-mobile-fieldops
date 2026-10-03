@@ -35,7 +35,7 @@ export default function NewObservationPage() {
         ...(location.state?.observation || { photos: [] }), // TODO for take photo or AndroidShareTarget
         sync_status: 'PENDING',
       };
-      if (!initVal.photos?.length) {
+      if (!initVal.photos?.length && !location.state?.observation) {
         // TODO photo for AndroidShareTarget
         const p = await takePhoto();
         if (p) {

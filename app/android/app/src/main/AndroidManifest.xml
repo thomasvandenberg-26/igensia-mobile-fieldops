@@ -29,10 +29,15 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
 
         </activity>
 
-        <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyBixVik8850vhfVwCCEr7XCBMZ57QGHiP0"/>
+        <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyBag8OG_pbh29-QIh-DBzQtD2OBmh3p3wM"/>
 
         <provider
             android:name="androidx.core.content.FileProvider"

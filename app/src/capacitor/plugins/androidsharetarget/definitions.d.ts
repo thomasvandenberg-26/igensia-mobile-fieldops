@@ -5,7 +5,7 @@ import { Plugin } from '@capacitor/core'
 
 export interface AndroidShareTargetEventData {
   mimeType: string;
-  uri: string;
+  uri?: string; // absent si seul du texte est partage
   extraText?: string;
 }
 

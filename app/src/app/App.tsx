@@ -1,14 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { IonApp, IonRouterOutlet, IonSplitPane, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { Route, useLocation, useNavigate } from 'react-router-dom';
 
 import { AuthProvider } from '../auth/context/AuthContext';
-import { CurrentSessionProvider } from '../fieldops/context/CurrentSessionContext';
+import { CurrentSessionProvider, useCurrentSession } from '../fieldops/context/CurrentSessionContext';
 import { RequireAuth } from '../auth/guards/RequireAuth';
 import { RequireGuest } from '../auth/guards/RequireGuest';
 import { AppBootstrap } from './AppBootstrap';
-import { ROUTE_PATTERNS } from './routes';
+import { ROUTE_PATTERNS, ROUTES } from './routes';
 import { SideMenu } from '../shared/components/SideMenu';
 
 import LoginEmailPage from '../auth/pages/LoginEmailPage';
@@ -37,6 +37,10 @@ setupIonicReact();
 const RouterRootChild = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentSession } = useCurrentSession();
+  // ref : le listener natif n'est enregistre qu'une fois, il doit lire la seance courante a jour
+  const currentSessionIdRef = useRef<string | undefined>(undefined);
+  currentSessionIdRef.current = currentSession?.id;
   
   useEffect(() => {
     console.log('Route changed to:', location.pathname);
@@ -49,33 +53,28 @@ const RouterRootChild = () => {
       'androidShareTargetEvent',
       async (data: AndroidShareTargetEventData) => {
         console.log('FieldOps App AndroidShareTargetEventData', JSON.stringify(data));
-        alert(JSON.stringify(data));
-        
-        // read image data :
-        // the Filesystem API supports using full file:// paths, or reading content:// files on Android. Simply leave out the directory param to use a full file path
-        // encoding : if not provided, data is read as binary and returned as base64
-        // see https://capacitorjs.com/docs/apis/filesystem#readfile
-        const res = await Filesystem.readFile({ path: data.uri });
-        console.log('FieldOps App AndroidShareTarget file base64 data', JSON.stringify(res.data));
-        ///alert(JSON.stringify(res.data));
-        
-        // navigate to new observation while passing photo data as routing parameter :
-        if (res.data instanceof Blob) {
-          console.log('FieldOps App AndroidShareTarget not impl\'d on PẄA');
-          alert('FieldOps App AndroidShareTarget not impl\'d on PẄA');
-          
-        } else {
-          // TODO Rajouter le partage aussi de texte depuis WhatsApp ou autre application de messagerie, et le mettre dans Observation.notes
-          const observation = {
-            notes: data.extraText,
-            photos: [{
-              id: '0',
-              data: res.data as unknown as string,
-              mime_type: data.mimeType,
-            }]
-          };
-          navigate(ROUTE_PATTERNS.observationNew, { state: { observation } });
+       
+        // partage de texte seul (ex. WhatsApp) : pas d'uri, juste du texte -> Observation.notes
+        const photos: { id: string; data: string; mime_type: string }[] = [];
+        if (data.uri) {
+          // the Filesystem API supports using full file:// paths, or reading content:// files on Android
+          // see https://capacitorjs.com/docs/apis/filesystem#readfile
+          const res = await Filesystem.readFile({ path: data.uri });
+          if (res.data instanceof Blob) {
+            console.log('FieldOps App AndroidShareTarget not impl\'d on PWA');
+            return;
+          }
+          photos.push({ id: '0', data: res.data as unknown as string, mime_type: data.mimeType });
         }
+        
+        // navigate to new observation while passing photo + text as routing parameter :
+        const observation = {
+          notes: data.extraText || '',
+          photos,
+        };
+        const sessionId = currentSessionIdRef.current;
+        if (!sessionId) { console.log('AndroidShareTarget : pas de seance courante'); return; }
+        navigate(ROUTES.observationNew(sessionId), { state: { observation } });
       }
     );
   }, [navigate]);

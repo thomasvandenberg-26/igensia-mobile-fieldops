@@ -29,7 +29,9 @@ class AndroidShareTargetHandler : Plugin() {
             ACTION_SEND -> {
                 if (intent.type?.startsWith("image/") == true){
                     handleSendImage(intent) // Handle single image being sent
-                } // et sinon quoi faire ?
+                } else if (intent.type?.startsWith("text/") == true) {
+                    handleSendText(intent) // texte seul partage (ex. depuis WhatsApp)
+                }
             } else -> {
               // TODO
           }
@@ -47,10 +49,19 @@ class AndroidShareTargetHandler : Plugin() {
             ret.put("uri", uri)
             ret.put("mimeType", mimeType)
             // TODO Rajouter le partage aussi de texte depuis WhatsApp ou autre application de messagerie, et le mettre dans Observation.notes
-            if (extraText != null) ret.put("extraText", extraText)
+            if (extraText != null) ret.put("extraText", extraText.toString())
 
             Log.d(TAG, "notifyListeners $uri $mimeType $extraText !")
             notifyListeners("androidShareTargetEvent", ret)
         }
+    }
+
+    fun handleSendText(intent: Intent) {
+        val extraText = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        val ret = JSObject()
+        ret.put("mimeType", intent.type)
+        if (extraText != null) ret.put("extraText", extraText)
+        Log.d(TAG, "notifyListeners text $extraText !")
+        notifyListeners("androidShareTargetEvent", ret)
     }
 }
